@@ -1,0 +1,12 @@
+# macOS App Bundle
+Brigt.app/
+
+# Build artifacts
+icon.icns
+
+# State files
+.brigt_software_state
+.brigt_state
+
+# OS files
+.DS_Store

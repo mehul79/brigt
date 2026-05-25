@@ -2,6 +2,10 @@
 
 A minimal macOS menu bar application for software-only dimming of external displays.
 
+### Demo
+
+https://github.com/user-attachments/assets/8ab0cada-e2cf-47b7-8e99-349feaae6d50
+
 ## Features
 - Minimalist menu bar interface.
 - Software-based brightness control (overlay dimming).

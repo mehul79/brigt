@@ -23,7 +23,15 @@ fi
 
 # Compile
 echo "Compiling..."
-swiftc -O BrigtApp.swift -parse-as-library -o "$MACOS_DIR/$APP_NAME" -sdk $(xcrun --show-sdk-path --sdk macosx) -target arm64-apple-macosx13.0
+# Framework linking is required, and -parse-as-library is needed for @main
+swiftc BrigtApp.swift \
+    -parse-as-library \
+    -o "$MACOS_DIR/$APP_NAME" \
+    -framework SwiftUI \
+    -framework AppKit \
+    -framework Foundation \
+    -sdk $(xcrun --show-sdk-path --sdk macosx) \
+    -target arm64-apple-macosx13.0
 
 # Create Info.plist
 cat > "$CONTENTS_DIR/Info.plist" <<EOF
@@ -43,6 +51,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
@@ -50,5 +60,14 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
+
+chmod +x "$MACOS_DIR/$APP_NAME"
+
+# Remove quarantine bits and ad-hoc sign the app
+echo "Signing..."
+xattr -cr "$APP_DIR"
+codesign --force --deep --sign - "$APP_DIR"
+
+touch "$APP_DIR"
 
 echo "Done! ${APP_NAME}.app created."

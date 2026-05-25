@@ -4,20 +4,16 @@ import AppKit
 class SoftwareDimmer: ObservableObject {
     @Published var brightness: Double = 100 {
         didSet {
-            // Trigger UI update explicitly if needed, 
-            // though @Published handles this for the MenuBarExtra view.
             updateOverlays()
             saveState()
         }
     }
     
-    private var windows: [NSWindow] = []
+    private var windows: [NSPanel] = []
     private let stateFile = NSString(string: "~/.brigt_software_state").expandingTildeInPath
     
     init() {
         loadState()
-        
-        // Delay window setup slightly to ensure app is ready
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.setupWindows()
         }
@@ -34,33 +30,28 @@ class SoftwareDimmer: ObservableObject {
         let alpha = CGFloat(1.0 - (brightness / 100.0))
         
         for screen in NSScreen.screens {
-            // If it's the built-in screen and we have others, skip it
-            // On M1 MacBook Air/Pro, the first screen is usually the built-in.
             if NSScreen.screens.count > 1 && screen == NSScreen.screens.first {
                 continue
             }
             
-            let window = NSWindow(
+            let panel = NSPanel(
                 contentRect: screen.frame,
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
             
-            window.backgroundColor = .black
-            window.alphaValue = alpha
-            window.isReleasedWhenClosed = false
-            window.ignoresMouseEvents = true
+            panel.backgroundColor = .black
+            panel.alphaValue = alpha
+            panel.isReleasedWhenClosed = false
+            panel.ignoresMouseEvents = true
+            panel.level = NSWindow.Level(Int(CGWindowLevelForKey(.maximumWindow)))
+            panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+            panel.canHide = false
+            panel.hidesOnDeactivate = false
             
-            // Using a extremely high level to ensure it's on top of everything
-            window.level = NSWindow.Level(Int(CGWindowLevelForKey(.maximumWindow)))
-            
-            window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-            window.canHide = false
-            window.hidesOnDeactivate = false
-            
-            window.orderFrontRegardless()
-            windows.append(window)
+            panel.orderFrontRegardless()
+            windows.append(panel)
         }
     }
     
@@ -82,6 +73,39 @@ class SoftwareDimmer: ObservableObject {
     
     private func saveState() {
         try? String(brightness).write(toFile: stateFile, atomically: true, encoding: .utf8)
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var statusItem: NSStatusItem?
+    var dimmer: SoftwareDimmer?
+    var popover = NSPopover()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        dimmer = SoftwareDimmer()
+        
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem?.button {
+            button.image = NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "Brightness")
+            button.action = #selector(togglePopover)
+        }
+        
+        let settingsView = SettingsView(dimmer: dimmer!)
+        popover.contentSize = NSSize(width: 250, height: 180)
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: settingsView)
+    }
+
+    @objc func togglePopover(_ sender: AnyObject?) {
+        if let button = statusItem?.button {
+            if popover.isShown {
+                popover.performClose(sender)
+            } else {
+                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+                popover.contentViewController?.view.window?.makeKey()
+            }
+        }
     }
 }
 
@@ -111,7 +135,7 @@ struct SettingsView: View {
             Divider()
             
             HStack {
-                Button("Refresh Screens") {
+                Button("Refresh") {
                     dimmer.setupWindows()
                 }
                 .buttonStyle(.bordered)
@@ -127,20 +151,16 @@ struct SettingsView: View {
             }
         }
         .padding()
-        .frame(width: 250)
     }
 }
 
 @main
 struct BrigtApp: App {
-    @StateObject private var dimmer = SoftwareDimmer()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
-        MenuBarExtra {
-            SettingsView(dimmer: dimmer)
-        } label: {
-            Image(systemName: "sun.max.fill")
+        Settings {
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
     }
 }
